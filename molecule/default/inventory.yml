@@ -1,0 +1,6 @@
+---
+all:
+  children:
+    vault_server:
+      hosts:
+        vault:

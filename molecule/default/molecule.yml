@@ -1,0 +1,32 @@
+---
+dependency:
+  name: galaxy
+  enabled: false
+driver:
+  name: vagrant
+  default_box: generic/ubuntu2004
+  # default_box: generic/centos7
+platforms:
+  - name: vault
+    interfaces:
+      - network_name: private_network 
+        ip: 192.168.56.110
+provisioner:
+  name: ansible
+  inventory:
+    links:
+      hosts: inventory.yml
+verifier:
+  name: testinfra
+  options:
+    verbose: true
+    sudo: true
+
+scenario:
+  test_sequence:
+    - destroy
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy

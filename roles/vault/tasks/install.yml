@@ -1,0 +1,64 @@
+---
+- name: Download vault.deb
+  ansible.builtin.get_url:
+    url: https://apt.releases.hashicorp.com/pool/amd64/main/vault_1.12.1-1_amd64.deb
+    dest: /tmp/vault.deb
+    mode: 0644
+
+- name: Install vault
+  ansible.builtin.apt:
+    deb: /tmp/vault.deb
+    state: present
+
+- name: Copy config
+  ansible.builtin.copy:
+    src: vault.hcl
+    dest: /etc/vault.d/vault.hcl
+    owner: vault
+    group: vault
+    mode: 0644
+
+- name: Enable and run vault
+  ansible.builtin.systemd:
+    name: vault
+    enabled: true
+    state: started
+
+- name: Add http address to environment
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    regexp: '^VAULT_ADDR.*$'
+    line: VAULT_ADDR=http://127.0.0.1:8200
+
+- name: Register initialization of a operator
+  ansible.builtin.command: vault operator init -format=json
+  register: vault_operator_init
+  changed_when: vault_operator_init.rc == 0
+
+- name: Set register to var
+  ansible.builtin.set_fact:
+    vault_operator_init_json: '{{ vault_operator_init.stdout | from_json }}'
+
+- name: Save root token
+  ansible.builtin.copy:
+    content: '{{ vault_operator_init_json["root_token"] }}'
+    dest: /root/.vault_root_token
+    owner: root
+    group: root
+    mode: 0600
+
+- name: Save unseal keys
+  ansible.builtin.lineinfile:
+    line: '{{ item }}'
+    path: /root/.vault_unseal_keys
+    create: true
+    owner: root
+    group: root
+    mode: 0600
+  with_items:
+    - '{{ vault_operator_init_json["unseal_keys_b64"] }}'
+
+- name: Unseal vault
+  ansible.builtin.command: 'vault operator unseal {{ item }}'
+  with_items: '{{ vault_operator_init_json["unseal_keys_b64"] }}'
+  changed_when: vault_operator_init.rc == 0
